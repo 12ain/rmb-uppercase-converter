@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>人民币大写转换工具</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/axios@1.4.0/dist/axios.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.min.js"></script>
+
+  <!-- Tailwind配置 -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#165DFF',
+            secondary: '#FF7D00',
+            neutral: '#F5F7FA',
+          },
+          fontFamily: {
+            inter: ['Inter', 'system-ui', 'sans-serif'],
+          },
+        },
+      }
+    }
+  </script>
+
+  <style type="text/tailwindcss">
+    @layer utilities {
+      .content-auto {
+        content-visibility: auto;
+      }
+      .transition-all-300 {
+        transition: all 0.3s ease;
+      }
+      .card-shadow {
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.03);
+      }
+    }
+  </style>
+</head>
+<body class="bg-neutral font-inter min-h-screen flex flex-col">
+  <header class="bg-white shadow-sm sticky top-0 z-10">
+    <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+      <div class="flex items-center space-x-2">
+        <i class="fa fa-calculator text-primary text-2xl"></i>
+        <h1 class="text-xl md:text-2xl font-bold text-gray-800">人民币大写转换工具</h1>
+      </div>
+      <nav>
+        <ul class="flex space-x-6">
+          <li><a href="#" class="text-gray-600 hover:text-primary transition-all-300">首页</a></li>
+          <li><a href="#" class="text-gray-600 hover:text-primary transition-all-300">关于</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main class="flex-grow container mx-auto px-4 py-8 md:py-16">
+    <div class="max-w-3xl mx-auto">
+      <!-- 介绍卡片 -->
+      <div class="bg-white rounded-xl p-6 mb-8 card-shadow transform hover:translate-y-[-5px] transition-all-300">
+        <h2 class="text-lg md:text-xl font-semibold text-gray-800 mb-3">
+          <i class="fa fa-info-circle text-primary mr-2"></i>使用说明
+        </h2>
+        <p class="text-gray-600 leading-relaxed">
+          本工具可将阿拉伯数字表示的人民币金额转换为中文大写形式。
+          支持的金额范围从0到999999999999.99（即从0到近一万亿），精确到小数点后两位。
+          中文大写使用标准的会计写法，适用于财务、合同等正式场合。
+        </p>
+      </div>
+
+      <!-- 转换工具卡片 -->
+      <div id="app" class="bg-white rounded-xl p-6 md:p-8 card-shadow">
+        <div class="mb-6">
+          <label for="amount" class="block text-sm font-medium text-gray-700 mb-2">
+            <i class="fa fa-money text-primary mr-2"></i>输入金额（阿拉伯数字）
+          </label>
+          <div class="relative">
+            <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500">
+              ¥
+            </span>
+            <input
+              v-model="amount"
+              @input="validateInput"
+              type="text"
+              id="amount"
+              class="w-full pl-8 pr-10 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all-300 outline-none"
+              placeholder="请输入金额，例如：1234.56"
+            >
+            <button
+              @click="clearInput"
+              v-show="amount.length > 0"
+              type="button"
+              class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500 hover:text-gray-700 transition-all-300"
+            >
+              <i class="fa fa-times-circle"></i>
+            </button>
+          </div>
+          <p v-if="errorMessage" class="mt-2 text-sm text-red-500">
+            <i class="fa fa-exclamation-circle mr-1"></i>{{ errorMessage }}
+          </p>
+        </div>
+
+        <div class="mb-6">
+          <label class="block text-sm font-medium text-gray-700 mb-2">
+            <i class="fa fa-font text-primary mr-2"></i>中文大写结果
+          </label>
+          <div class="relative">
+            <textarea
+              v-model="result"
+              rows="3"
+              class="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all-300 outline-none resize-none"
+              placeholder="转换结果将显示在这里"
+              readonly
+            ></textarea>
+            <button
+              @click="copyResult"
+              :class="copyButtonClass"
+              type="button"
+              class="absolute top-2 right-2 px-3 py-1 text-xs font-medium rounded-md transition-all-300"
+            >
+              <i class="fa fa-clipboard mr-1"></i>{{ copyButtonText }}
+            </button>
+          </div>
+        </div>
+
+        <div class="flex justify-center">
+          <button
+            @click="convert"
+            :disabled="isConverting || !isValid"
+            class="px-6 py-3 bg-primary hover:bg-primary/90 text-white rounded-lg font-medium shadow-md hover:shadow-lg transition-all-300 flex items-center justify-center"
+          >
+            <i class="fa fa-exchange mr-2"></i>
+            <span v-if="!isConverting">转换</span>
+            <span v-else>
+              <i class="fa fa-spinner fa-spin mr-2"></i>转换中...
+            </span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 示例卡片 -->
+      <div class="bg-white rounded-xl p-6 mt-8 card-shadow">
+        <h2 class="text-lg md:text-xl font-semibold text-gray-800 mb-4">
+          <i class="fa fa-lightbulb-o text-secondary mr-2"></i>使用示例
+        </h2>
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+              <tr>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">阿拉伯数字</th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">中文大写</th>
+              </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+              <tr>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">1234.56</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">壹仟贰佰叁拾肆点伍陆</td>
+              </tr>
+              <tr>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">1000.00</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">壹仟整</td>
+              </tr>
+              <tr>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">100000000.00</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">壹亿整</td>
+              </tr>
+              <tr>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">10010010.01</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">壹仟零壹万零壹拾点零壹</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="bg-gray-800 text-white py-8">
+    <div class="container mx-auto px-4">
+      <div class="flex flex-col md:flex-row justify-between items-center">
+        <div class="mb-4 md:mb-0">
+          <div class="flex items-center space-x-2 mb-2">
+            <i class="fa fa-calculator text-primary text-xl"></i>
+            <span class="text-lg font-semibold">人民币大写转换工具</span>
+          </div>
+          <p class="text-gray-400 text-sm">准确、快速的金额转换服务</p>
+        </div>
+        <div class="flex space-x-6">
+          <a href="#" class="text-gray-400 hover:text-white transition-all-300">
+            <i class="fa fa-github text-xl"></i>
+          </a>
+          <a href="#" class="text-gray-400 hover:text-white transition-all-300">
+            <i class="fa fa-twitter text-xl"></i>
+          </a>
+          <a href="#" class="text-gray-400 hover:text-white transition-all-300">
+            <i class="fa fa-linkedin text-xl"></i>
+          </a>
+        </div>
+      </div>
+      <div class="border-t border-gray-700 mt-6 pt-6 text-center text-gray-400 text-sm">
+        © 2025 人民币大写转换工具 | 保留所有权利
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    const app = Vue.createApp({
+      data() {
+        return {
+          amount: '',
+          result: '',
+          errorMessage: '',
+          isValid: false,
+          isConverting: false,
+          copyButtonText: '复制结果',
+          copyButtonClass: 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+        }
+      },
+      methods: {
+        // 验证输入
+        validateInput() {
+          // 清除错误消息
+          this.errorMessage = '';
+
+          // 移除非数字和非小数点字符
+          this.amount = this.amount.replace(/[^0-9.]/g, '');
+
+          // 验证小数点数量
+          const dotCount = (this.amount.match(/\./g) || []).length;
+          if (dotCount > 1) {
+            this.amount = this.amount.replace(/\.$/, '');
+          }
+
+          // 验证小数点后位数
+          if (this.amount.includes('.')) {
+            const parts = this.amount.split('.');
+            if (parts[1].length > 2) {
+              parts[1] = parts[1].substring(0, 2);
+              this.amount = parts.join('.');
+            }
+          }
+
+          // 验证金额是否有效
+          if (this.amount) {
+            // 检查是否为有效的数字格式
+            const isValidNumber = /^\d+(\.\d{1,2})?$/.test(this.amount);
+            if (!isValidNumber) {
+              this.errorMessage = '请输入有效的金额格式';
+              this.isValid = false;
+              return;
+            }
+
+            // 检查金额是否超出范围（最大支持到999999999999.99）
+            const maxValue = 999999999999.99;
+            if (parseFloat(this.amount) > maxValue) {
+              this.errorMessage = '金额超出范围（最大支持到999999999999.99）';
+              this.isValid = false;
+              return;
+            }
+
+            this.isValid = true;
+          } else {
+            this.isValid = false;
+          }
+        },
+
+        // 清除输入
+        clearInput() {
+          this.amount = '';
+          this.result = '';
+          this.errorMessage = '';
+          this.isValid = false;
+          this.copyButtonText = '复制结果';
+          this.copyButtonClass = 'bg-gray-200 hover:bg-gray-300 text-gray-700';
+        },
+
+        // 转换金额
+        async convert() {
+          if (!this.isValid || this.isConverting) return;
+
+          this.isConverting = true;
+          this.errorMessage = '';
+
+          try {
+            const response = await axios.post('/api/convert', {
+              amount: this.amount
+            });
+
+            this.result = response.data.chinese;
+          } catch (error) {
+            if (error.response) {
+              this.errorMessage = error.response.data.error || '转换失败，请重试';
+            } else {
+              this.errorMessage = '网络错误，请检查连接';
+            }
+          } finally {
+            this.isConverting = false;
+          }
+        },
+
+        // 复制结果
+        copyResult() {
+          if (!this.result) return;
+
+          navigator.clipboard.writeText(this.result)
+            .then(() => {
+              this.copyButtonText = '已复制!';
+              this.copyButtonClass = 'bg-green-100 text-green-700';
+
+              setTimeout(() => {
+                this.copyButtonText = '复制结果';
+                this.copyButtonClass = 'bg-gray-200 hover:bg-gray-300 text-gray-700';
+              }, 2000);
+            })
+            .catch(err => {
+              this.errorMessage = '复制失败，请手动复制';
+              console.error('复制失败:', err);
+            });
+        }
+      }
+    });
+
+    app.mount('#app');
+  </script>
+</body>
+</html>
