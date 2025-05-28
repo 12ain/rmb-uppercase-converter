@@ -46,6 +46,7 @@ func ConvertToChinese(amount string) (string, error) {
 		return "", http.ErrBodyNotAllowed
 	}
 
+	// 处理整数部分转换
 	for i, r := range integer {
 		digit := int(r - '0')
 		pos := integerLen - i - 1
@@ -65,14 +66,22 @@ func ConvertToChinese(amount string) (string, error) {
 		}
 	}
 
+	// 添加"圆"单位
+	result.WriteString("圆")
+
 	// 处理小数部分
-	if decimal != "00" {
-		result.WriteString("点")
-		for _, r := range decimal {
-			result.WriteString(digits[int(r-'0')])
-		}
-	} else {
+	if decimal == "00" {
 		result.WriteString("整")
+	} else {
+		result.WriteString("")
+		if decimal[0] != '0' {
+			result.WriteString(digits[int(decimal[0]-'0')] + "角")
+		} else if decimal[1] != '0' {
+			result.WriteString("零")
+		}
+		if decimal[1] != '0' {
+			result.WriteString(digits[int(decimal[1]-'0')] + "分")
+		}
 	}
 
 	return result.String(), nil
